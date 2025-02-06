@@ -29,12 +29,13 @@ class FireflyClient:
         self.onboarding_signer = OnboardingSigner()
         
             
-    async def init(self, user_onboarding=True, api_token=""):
+    async def init(self, user_onboarding=True, api_token="", auth_token=""):
         """
             Initialize the client.
             Inputs:
                 user_onboarding (bool, optional): If set to true onboards the user address to exchange and gets authToken. Defaults to True.
-                api_token(string, optional): API token to initialize client in read-only mode 
+                api_token(string, optional): API token to initialize client in read-only mode
+                auth_token(string, optional): Auth token to avoid onboarding again if you already have the auth_token generated
         """
         self.contracts.contract_addresses = await self.get_contract_addresses()
 
@@ -50,17 +51,23 @@ class FireflyClient:
             if 'PERP' in k:
                 self.add_contract(name="Perpetual",address=v["Perpetual"], market=k)
 
+        # 1. priority to read only mode
         if api_token:
             self.apis.api_token = api_token
             # for socket
             self.socket.set_api_token(api_token)
             self.webSocketClient.set_api_token(api_token)
-        # In case of api_token received, user onboarding is not done
+        # 2. priority to perform onboarding if `true` over auth_token
         elif user_onboarding:
             self.apis.auth_token = await self.onboard_user()
             self.dmsApi.auth_token = self.apis.auth_token
             self.socket.set_token(self.apis.auth_token)
             self.webSocketClient.set_token(self.apis.auth_token)
+        # 3. if user has provided auth token avoid onboarding again and use provided token
+        elif auth_token:
+            self.dmsApi.auth_token = auth_token
+            self.socket.set_token(auth_token)
+            self.webSocketClient.set_token(auth_token)
 
 
     async def onboard_user(self, token:str=None):
